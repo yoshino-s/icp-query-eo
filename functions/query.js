@@ -72,6 +72,14 @@ export async function onRequest({ request }) {
             msg: "ok",
             data: await query(uid, domain, token, sign),
         });
+
+        return new Response(res, {
+            headers: {
+                'content-type': 'application/json; charset=UTF-8',
+                'Access-Control-Allow-Origin': '*',
+                status: 200,
+            },
+        });
     } catch (e) {
         return new Response(JSON.stringify({
             code: 500,
@@ -84,12 +92,4 @@ export async function onRequest({ request }) {
             status: 500,
         });
     }
-
-    return new Response(res, {
-        headers: {
-            'content-type': 'application/json; charset=UTF-8',
-            'Access-Control-Allow-Origin': '*',
-            status: 200,
-        },
-    });
 }
