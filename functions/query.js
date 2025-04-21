@@ -10,12 +10,13 @@ async function md5(str) {
 
 async function getToken() {
     const ts = Date.now();
+    const jsluid = Array.from({ length: 16 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
     const authKey = await md5("testtest" + ts);
     const resp = await fetch("https://hlwicpfwc.miit.gov.cn/icpproject_query/api/auth", {
         "headers": {
             "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
             "Referer": "https://beian.miit.gov.cn/",
-            "Cookie": "__jsluid_s=6452684553c30942fcb8cff8d5aa5a5b",
+            "Cookie": `__jsluid_s=${jsluid}`,
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124"
         },
         "body": `authKey=${authKey}&timeStamp=${ts}`,
@@ -25,25 +26,25 @@ async function getToken() {
     if (json.code !== 200) {
         throw new Error("获取token失败" + json.msg);
     }
-    return json.params.bussiness;
+    return [jsluid, json.params.bussiness];
 }
 
-async function query(domain, token, sign) {
-    const resp = await fetch("https://hlwicpfwc.miit.gov.cn/icpproject_query/api/auth", {
+async function query(uid, domain, token, sign) {
+    const resp = await fetch("https://hlwicpfwc.miit.gov.cn/icpproject_query/api/icpAbbreviateInfo/queryByCondition/", {
         "headers": {
-            "content-type": "application/json; charset=UTF-8",
+            "content-type": "application/json",
             "Referer": "https://beian.miit.gov.cn/",
-            "Cookie": "__jsluid_s=6452684553c30942fcb8cff8d5aa5a5b",
+            "Cookie": `__jsluid_s=${uid}`,
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124",
             "Token": token,
             "Sign": sign,
         },
-        "body": JSON.stringify({ "pageNum": "", "pageSize": "", "unitName": domain, "serviceType": 1 }),
+        "body": JSON.stringify({ "pageNum": "", "pageSize": "", "unitName": domain, "serviceType": 1 }).replace(/ /g, ""),
         "method": "POST"
     });
     const json = await resp.json();
     if (json.code !== 200) {
-        throw new Error("查询失败" + json.msg);
+        throw new Error("查询失败:" + json.msg);
     }
     return json.params;
 }
@@ -64,12 +65,25 @@ export async function onRequest({ request }) {
             status: 400,
         });
     }
-    const token = await getToken();
-    const res = JSON.stringify({
-        code: 200,
-        msg: "ok",
-        data: await query(domain, token, sign),
-    });
+    try {
+        const [uid, token] = await getToken();
+        const res = JSON.stringify({
+            code: 200,
+            msg: "ok",
+            data: await query(uid, domain, token, sign),
+        });
+    } catch (e) {
+        return new Response(JSON.stringify({
+            code: 500,
+            msg: e.message,
+        }), {
+            headers: {
+                'content-type': 'application/json; charset=UTF-8',
+                'Access-Control-Allow-Origin': '*',
+            },
+            status: 500,
+        });
+    }
 
     return new Response(res, {
         headers: {
